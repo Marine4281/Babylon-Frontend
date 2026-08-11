@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Radio, Video, Mic, Gift, X, Hand, Users, LogOut } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Radio, Video, Mic, Gift, X, Hand, Users, LogOut, PlayCircle, Film } from "lucide-react";
 import AgoraRTC from "agora-rtc-sdk-ng";
 import API from "../api/axios";
 import BottomNav from "../components/BottomNav";
@@ -18,6 +19,55 @@ function Avatar({ url, name, size = 40 }) {
       style={{ width: size, height: size, fontSize: size * 0.4 }}
     >
       {(name || "?")[0]?.toUpperCase()}
+    </div>
+  );
+}
+
+function GoLiveModal({ type, onClose, onStart }) {
+  const [title, setTitle] = useState("");
+  // Video defaults to recording ON, voice defaults to OFF — matches the backend defaults.
+  const [recordingEnabled, setRecordingEnabled] = useState(type === "video");
+  const [starting, setStarting] = useState(false);
+
+  const start = async () => {
+    setStarting(true);
+    try {
+      await onStart(title, recordingEnabled);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
+      <div className="bg-white w-full max-w-md rounded-t-2xl p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="font-black text-gray-900">Go Live — {type === "video" ? "Video" : "Voice"}</span>
+          <button onClick={onClose}><X size={20} className="text-gray-400" /></button>
+        </div>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Give your live a title..."
+          className="w-full text-sm bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 focus:outline-none focus:border-orange-400"
+        />
+        <label className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-3">
+          <span className="text-sm font-semibold text-gray-700">Save this LIVE as a replay?</span>
+          <input
+            type="checkbox"
+            checked={recordingEnabled}
+            onChange={(e) => setRecordingEnabled(e.target.checked)}
+            className="w-5 h-5 accent-orange-500"
+          />
+        </label>
+        <button
+          onClick={start}
+          disabled={starting}
+          className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"
+        >
+          {starting ? "Starting..." : (<><Radio size={16} /> Go Live</>)}
+        </button>
+      </div>
     </div>
   );
 }
@@ -296,6 +346,8 @@ export default function LivePage() {
   const [activeRoom, setActiveRoom] = useState(null);
   const [isHostView, setIsHostView] = useState(false);
   const [balance, setBalance] = useState(0);
+  const [showGoLiveModal, setShowGoLiveModal] = useState(false);
+  const [replays, setReplays] = useState([]);
 
   const loadRooms = useCallback((type) => {
     setLoading(true);
@@ -309,10 +361,14 @@ export default function LivePage() {
     API.get("/wallet/me").then(({ data }) => setBalance(data.balance)).catch(() => {});
   }, [tab, loadRooms]);
 
-  const goLive = async () => {
-    const title = prompt(`Title for your ${tab} room:`, "") || "";
+  useEffect(() => {
+    API.get("/replays?limit=6").then(({ data }) => setReplays(data.replays)).catch(() => {});
+  }, []);
+
+  const startLive = async (title, recordingEnabled) => {
     try {
-      const { data } = await API.post(`/live/${tab}`, { title });
+      const { data } = await API.post(`/live/${tab}`, { title, recordingEnabled });
+      setShowGoLiveModal(false);
       setIsHostView(true);
       setActiveRoom(data.room ? { ...data.room, agora: data.agora } : { ...data, agora: data.agora });
     } catch (err) {
@@ -329,12 +385,17 @@ export default function LivePage() {
     <div className="min-h-screen bg-gray-50 pb-20">
       <header className="sticky top-0 z-30 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between">
         <span className="text-xl font-black tracking-tight text-gray-900">LIVE</span>
-        <button
-          onClick={goLive}
-          className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5"
-        >
-          {tab === "voice" ? <Mic size={14} /> : <Video size={14} />} Go Live
-        </button>
+        <div className="flex items-center gap-2">
+          <Link to="/reels" className="text-gray-500 p-2">
+            <Film size={18} />
+          </Link>
+          <button
+            onClick={() => setShowGoLiveModal(true)}
+            className="bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold px-3.5 py-2 rounded-full flex items-center gap-1.5"
+          >
+            {tab === "voice" ? <Mic size={14} /> : <Video size={14} />} Go Live
+          </button>
+        </div>
       </header>
 
       <div className="flex border-b border-gray-100 bg-white">
@@ -381,6 +442,37 @@ export default function LivePage() {
         ))}
       </main>
 
+      {!loading && replays.length > 0 && (
+        <section className="max-w-md mx-auto px-3 pb-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-black text-gray-900 flex items-center gap-1">
+              <PlayCircle size={14} className="text-orange-500" /> Recent Replays
+            </span>
+            <Link to="/replays" className="text-[10px] font-bold text-orange-500">See all</Link>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {replays.map((r) => (
+              <Link
+                key={r._id}
+                to={`/replays/${r._id}`}
+                className="shrink-0 w-28 bg-neutral-900 rounded-xl overflow-hidden relative aspect-[3/4]"
+              >
+                {r.thumbnailUrl && (
+                  <img src={r.thumbnailUrl} alt={r.title} className="absolute inset-0 w-full h-full object-cover" />
+                )}
+                <span className="absolute bottom-1.5 left-1.5 right-1.5 text-white text-[10px] font-bold truncate">
+                  {r.title || `${r.creator?.username}'s replay`}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {showGoLiveModal && (
+        <GoLiveModal type={tab} onClose={() => setShowGoLiveModal(false)} onStart={startLive} />
+      )}
+
       {activeRoom && (
         <LiveRoomView
           room={activeRoom}
@@ -398,4 +490,4 @@ export default function LivePage() {
       <BottomNav />
     </div>
   );
-    }
+        }
