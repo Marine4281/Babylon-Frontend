@@ -1,163 +1,180 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { UserCircle2, LogOut, Phone, Mail, ShieldCheck } from "lucide-react";
+import { LogOut, Wallet, ArrowDownCircle, ArrowUpCircle, Send, BadgeCheck } from "lucide-react";
+import API from "../api/axios";
 import BottomNav from "../components/BottomNav";
-import LoginForm from "../components/LoginForm";
-import RegisterForm from "../components/RegisterForm";
-
-const ROLE_ROUTE = {
-  admin: "/dashboard",
-  manager: "/dashboard",
-  accountant: "/dashboard",
-  cashier: "/dashboard",
-  waiter: "/waiter",
-  kitchen: "/kitchen",
-  customer: "/profile",
-};
+import { formatCurrency } from "../utils/formatCurrency";
 
 function initials(name = "") {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join("") || "U";
+  return (name.trim()[0] || "U").toUpperCase();
 }
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(() => {
-    const raw = localStorage.getItem("user");
-    return raw ? JSON.parse(raw) : null;
-  });
-  const [tab, setTab] = useState("login"); // "login" | "register"
+  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+
+  const [profile, setProfile] = useState(null);
+  const [balance, setBalance] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (user && user.role !== "customer") {
-      navigate(ROLE_ROUTE[user.role] || "/order", { replace: true });
-    }
-  }, [user, navigate]);
-
-  const handleAuthSuccess = (loggedInUser) => {
-    if (loggedInUser.role !== "customer") {
-      navigate(ROLE_ROUTE[loggedInUser.role] || "/order", { replace: true });
-      return;
-    }
-    setUser(loggedInUser);
-  };
+    if (!storedUser?.username) return;
+    Promise.all([API.get(`/users/${storedUser.username}`), API.get("/wallet/me")])
+      .then(([profileRes, walletRes]) => {
+        setProfile(profileRes.data);
+        setBalance(walletRes.data.balance);
+      })
+      .finally(() => setLoading(false));
+  }, [storedUser?.username]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-    setUser(null);
-    setTab("login");
+    navigate("/login", { replace: true });
   };
 
-  // ---------- Logged-in view ----------
-  if (user) {
+  const walletAction = async (type) => {
+    if (type === "deposit") {
+      const amount = prompt("Amount to deposit ($):", "50");
+      if (!amount || isNaN(amount)) return;
+      setBusy(true);
+      try {
+        const { data } = await API.post("/wallet/deposit", { amount: Number(amount) });
+        setBalance(data.balance);
+      } catch (err) {
+        alert(err?.response?.data?.message || "Deposit failed");
+      } finally {
+        setBusy(false);
+      }
+    } else if (type === "withdraw") {
+      const amount = prompt("Amount to withdraw ($):", "20");
+      if (!amount || isNaN(amount)) return;
+      setBusy(true);
+      try {
+        const { data } = await API.post("/wallet/withdraw", { amount: Number(amount) });
+        setBalance(data.balance);
+      } catch (err) {
+        alert(err?.response?.data?.message || "Withdraw failed");
+      } finally {
+        setBusy(false);
+      }
+    } else if (type === "transfer") {
+      const username = prompt("Recipient username:");
+      if (!username) return;
+      const amount = prompt("Amount to send ($):", "10");
+      if (!amount || isNaN(amount)) return;
+      setBusy(true);
+      try {
+        const { data } = await API.post("/wallet/transfer", { username, amount: Number(amount) });
+        setBalance(data.balance);
+        alert(`Sent $${Number(amount).toFixed(2)} to @${username}`);
+      } catch (err) {
+        alert(err?.response?.data?.message || "Transfer failed");
+      } finally {
+        setBusy(false);
+      }
+    }
+  };
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-stone-50 pb-24">
-        <header className="bg-gradient-to-r from-stone-900 to-stone-800 px-6 pt-10 pb-16">
-          <p className="text-stone-400 text-xs font-semibold tracking-wide uppercase mb-1">Account</p>
-          <h1 className="text-white text-2xl font-black">My Profile</h1>
-        </header>
-
-        <div className="max-w-md mx-auto px-5 -mt-10">
-          <div className="bg-white rounded-2xl shadow-sm border border-stone-200 p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-xl shrink-0">
-                {initials(user.fullName)}
-              </div>
-              <div className="min-w-0">
-                <h2 className="font-black text-stone-900 text-lg truncate">{user.fullName}</h2>
-                <p className="text-stone-400 text-sm truncate">@{user.username}</p>
-                <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-bold uppercase tracking-wide text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
-                  <ShieldCheck size={11} /> Customer
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-6 pt-5 border-t border-stone-100 space-y-3">
-              <div className="flex items-center gap-3 text-sm">
-                <span className="w-8 h-8 rounded-lg bg-stone-50 flex items-center justify-center shrink-0">
-                  <Mail size={15} className="text-stone-400" />
-                </span>
-                <div>
-                  <p className="text-stone-400 text-xs">Email</p>
-                  <p className="text-stone-800 font-medium">{user.email || "Not provided"}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 text-sm">
-                <span className="w-8 h-8 rounded-lg bg-stone-50 flex items-center justify-center shrink-0">
-                  <Phone size={15} className="text-stone-400" />
-                </span>
-                <div>
-                  <p className="text-stone-400 text-xs">Phone</p>
-                  <p className="text-stone-800 font-medium">{user.phone || "Not provided"}</p>
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={handleLogout}
-              className="mt-6 w-full flex items-center justify-center gap-2 border border-stone-200 text-stone-600 font-semibold py-3 rounded-xl hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
-            >
-              <LogOut size={16} /> Log out
-            </button>
-          </div>
-        </div>
-
-        <BottomNav />
+      <div className="min-h-screen bg-gray-50 pb-20 flex items-center justify-center">
+        <p className="text-xs text-gray-400">Loading profile...</p>
       </div>
     );
   }
 
-  // ---------- Logged-out: login / register ----------
   return (
-    <div className="min-h-screen bg-stone-50 pb-24">
-      <header className="bg-gradient-to-r from-stone-900 to-stone-800 px-6 pt-10 pb-16 text-center">
-        <div className="inline-flex items-center gap-2 mb-2">
-          <span className="text-2xl">🍴</span>
-          <span className="font-black text-xl text-white">
-            Resto<span className="text-orange-500">POS</span>
-          </span>
-        </div>
-        <p className="text-stone-400 text-sm">Sign in or create an account to track your orders</p>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-gray-100 px-4 py-3 flex items-center justify-between">
+        <span className="text-xl font-black tracking-tight text-gray-900">MY IDENTITY</span>
+        <button onClick={handleLogout} className="text-gray-500 hover:text-red-500">
+          <LogOut size={18} />
+        </button>
       </header>
 
-      <div className="max-w-md mx-auto px-5 -mt-10">
-        <div className="bg-white rounded-2xl shadow-sm border border-stone-200 overflow-hidden">
-          <div className="flex border-b border-stone-100">
-            {["login", "register"].map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`flex-1 py-4 text-sm font-bold transition-colors relative ${
-                  tab === t ? "text-orange-500" : "text-stone-400"
-                }`}
-              >
-                {t === "login" ? "Log In" : "Sign Up"}
-                {tab === t && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />
-                )}
-              </button>
-            ))}
+      <main className="max-w-md mx-auto bg-white min-h-screen">
+        <div className="relative">
+          <div className="h-28 bg-gradient-to-r from-orange-400 to-orange-500 overflow-hidden">
+            {profile?.coverPhotoUrl && (
+              <img src={profile.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover opacity-70" />
+            )}
           </div>
-
-          <div className="p-6">
-            {tab === "login" ? (
-              <LoginForm onSuccess={handleAuthSuccess} />
+          <div className="absolute top-16 left-4 p-1 bg-white rounded-full shadow-md">
+            {profile?.avatarUrl ? (
+              <img src={profile.avatarUrl} alt="Avatar" className="w-20 h-20 rounded-full object-cover" />
             ) : (
-              <RegisterForm onSuccess={handleAuthSuccess} />
+              <div className="w-20 h-20 rounded-full bg-orange-100 text-orange-600 font-black text-2xl flex items-center justify-center">
+                {initials(profile?.fullName || profile?.username)}
+              </div>
             )}
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-1.5 mt-5 text-xs text-stone-400">
-          <UserCircle2 size={14} />
-          Browsing and ordering doesn't require an account — sign in only for order history.
+        <div className="px-4 pt-8 space-y-1.5">
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-xl font-black tracking-tight">{profile?.username}</h2>
+            {profile?.countryCode && <span className="text-sm">{profile.countryCode}</span>}
+            {profile?.isVerified && <BadgeCheck size={16} className="text-orange-500" />}
+          </div>
+          {profile?.bio && <p className="text-xs text-gray-700 leading-relaxed pt-1">{profile.bio}</p>}
+
+          <div className="flex items-center gap-4 pt-2.5 text-xs">
+            <span className="text-gray-500">
+              <strong className="text-gray-900 font-bold">{profile?.followingCount ?? 0}</strong> Following
+            </span>
+            <span className="text-gray-500">
+              <strong className="text-gray-900 font-bold">{profile?.followersCount ?? 0}</strong> Followers
+            </span>
+            <span className="text-gray-500">
+              <strong className="text-gray-900 font-bold">{profile?.postsCount ?? 0}</strong> Posts
+            </span>
+          </div>
         </div>
-      </div>
+
+        <div className="mx-4 mt-5 p-4 bg-gradient-to-br from-neutral-900 to-neutral-800 rounded-2xl text-white space-y-4">
+          <div className="flex justify-between items-center">
+            <div>
+              <span className="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Babylon Core Wallet</span>
+              <h3 className="text-2xl font-black tracking-tight">{formatCurrency(balance)}</h3>
+            </div>
+            <div className="bg-white/10 p-2.5 rounded-xl text-orange-500">
+              <Wallet size={20} />
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <button
+              disabled={busy}
+              onClick={() => walletAction("deposit")}
+              className="bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center gap-1"
+            >
+              <ArrowDownCircle size={14} /> Deposit
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => walletAction("withdraw")}
+              className="bg-white/10 hover:bg-white/15 disabled:opacity-60 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center gap-1"
+            >
+              <ArrowUpCircle size={14} /> Withdraw
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => walletAction("transfer")}
+              className="bg-white/10 hover:bg-white/15 disabled:opacity-60 text-white font-bold text-xs py-2 rounded-xl flex items-center justify-center gap-1"
+            >
+              <Send size={14} /> P2P Send
+            </button>
+          </div>
+        </div>
+
+        {/* Posts/Streams/Saved grids need list endpoints (getFeed doesn't filter by author,
+            and there's no VOD or saved-list route yet) — wire this up once those exist. */}
+        <div className="px-4 mt-6 py-10 text-center text-gray-400 text-xs">
+          Post, broadcast, and saved grids will appear here once the backend exposes
+          per-user listing endpoints.
+        </div>
+      </main>
 
       <BottomNav />
     </div>
