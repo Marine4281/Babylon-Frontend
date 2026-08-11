@@ -1,14 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import CashierPage from "./pages/CashierPage";
-import WaiterPage from "./pages/WaiterPage";
-import KitchenPage from "./pages/KitchenPage";
-import CustomerPage from "./pages/CustomerPage";
-import OrdersPage from "./pages/OrdersPage";
+import HomePage from "./pages/HomePage";
+import InboxPage from "./pages/InboxPage";
+import LivePage from "./pages/LivePage";
+import GamesPage from "./pages/GamesPage";
 import ProfilePage from "./pages/ProfilePage";
+import LoginPage from "./pages/LoginPage";
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem("token");
-  if (!token) return <Navigate to="/profile" replace />;
+  if (!token) return <Navigate to="/login" replace />;
   return children;
 }
 
@@ -16,43 +16,52 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/order" replace />} />
+        <Route path="/" element={<Navigate to="/home" replace />} />
 
-        {/* Customer-facing, no login required */}
-        <Route path="/order" element={<CustomerPage />} />
-        <Route path="/orders" element={<OrdersPage />} />
-
-        {/* One login/register page for everyone, lives in the Profile tab */}
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/login" element={<Navigate to="/profile" replace />} />
-        <Route path="/register" element={<Navigate to="/profile" replace />} />
+        <Route path="/login" element={<LoginPage />} />
 
         <Route
-          path="/dashboard"
+          path="/home"
           element={
             <PrivateRoute>
-              <CashierPage />
+              <HomePage />
             </PrivateRoute>
           }
         />
         <Route
-          path="/waiter"
+          path="/inbox"
           element={
             <PrivateRoute>
-              <WaiterPage />
+              <InboxPage />
             </PrivateRoute>
           }
         />
         <Route
-          path="/kitchen"
+          path="/live"
           element={
             <PrivateRoute>
-              <KitchenPage />
+              <LivePage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/games"
+          element={
+            <PrivateRoute>
+              <GamesPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <PrivateRoute>
+              <ProfilePage />
             </PrivateRoute>
           }
         />
 
-        <Route path="*" element={<Navigate to="/order" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>
   );
