@@ -1,156 +1,97 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import API from "../api/axios";
+import React, { useState, useContext } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { AuthContext } from "../Context/AuthContext";
+import logo from "../Assets/logo.png";
 
-export default function LoginPage() {
+const Login = () => {
+  const { login } = useContext(AuthContext);
   const navigate = useNavigate();
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError]       = useState("");
-  const [loading, setLoading]   = useState(false);
-  const [showPass, setShowPass] = useState(false);
+
+  const [form, setForm] = useState({ identifier: "", password: "" });
+  const [showPw, setShowPw] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
     setLoading(true);
+    setMsg("");
     try {
-      const res = await API.post("/auth/login", { username, password });
-      localStorage.setItem("token", res.data.token);
-      localStorage.setItem("user", JSON.stringify(res.data.user));
-      const { role } = res.data.user;
-      if (role === "waiter") navigate("/waiter");
-      else navigate("/dashboard");
+      const { token, user } = await login(form);
+      localStorage.setItem("token", token);
+      localStorage.setItem("user", JSON.stringify(user));
+      navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.message || "Invalid username or password");
-    } finally {
-      setLoading(false);
+      setMsg(err.response?.data?.message || "Invalid login or password.");
     }
+    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 flex">
-
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex flex-col justify-between w-1/2 bg-gray-900 border-r border-gray-800 p-12">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl">🍴</span>
-          <span className="font-black text-xl tracking-tight text-white">
-            Resto<span className="text-orange-500">POS</span>
-          </span>
+    <div className="min-h-screen bg-gray-100 flex flex-col items-center justify-center px-4 py-8">
+      <div className="bg-white w-full max-w-sm rounded-2xl shadow-lg p-6">
+        <div className="flex flex-col items-center mb-5">
+          <img src={logo} alt="MarineCash" className="w-14 h-14 rounded-full mb-2" />
+          <h1 className="text-2xl font-extrabold text-orange-500">Welcome Back</h1>
+          <p className="text-gray-400 text-sm">Log in to your MarineCash account</p>
         </div>
 
-        <div>
-          <div className="text-5xl mb-8">🍽️</div>
-          <h2 className="text-4xl font-black text-white leading-tight mb-4">
-            Your restaurant,<br />
-            <span className="text-orange-500">fully in control.</span>
-          </h2>
-          <p className="text-gray-400 text-lg leading-relaxed max-w-sm">
-            Real-time orders, table management, and receipts — all from one fast login.
-          </p>
-        </div>
+        {msg && (
+          <div className="bg-red-50 border border-red-300 text-red-600 text-sm rounded-xl p-3 mb-4 text-center">
+            {msg}
+          </div>
+        )}
 
-        <div className="grid grid-cols-3 gap-4">
-          {[
-            { icon: "📋", label: "Orders" },
-            { icon: "🧾", label: "Receipts" },
-            { icon: "📊", label: "Revenue" },
-          ].map((item) => (
-            <div key={item.label} className="bg-gray-800 rounded-xl p-4 text-center">
-              <div className="text-2xl mb-1">{item.icon}</div>
-              <div className="text-gray-400 text-xs font-medium">{item.label}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Right panel — form */}
-      <div className="flex-1 flex flex-col justify-center items-center px-6">
-
-        {/* Mobile logo */}
-        <div className="lg:hidden flex items-center gap-2 mb-10">
-          <span className="text-2xl">🍴</span>
-          <span className="font-black text-xl text-white">
-            Resto<span className="text-orange-500">POS</span>
-          </span>
-        </div>
-
-        <div className="w-full max-w-sm">
-          <div className="mb-8">
-            <h1 className="text-3xl font-black text-white mb-2">Welcome back</h1>
-            <p className="text-gray-500">Sign in to your staff account</p>
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-xs font-semibold text-gray-500">Email or Phone</label>
+            <input
+              type="text" name="identifier" value={form.identifier}
+              onChange={handleChange} placeholder="your@email.com or +254..." required
+              autoFocus
+              className="w-full border-2 border-gray-200 focus:border-orange-400 rounded-xl px-4 py-2.5 text-sm mt-1 outline-none transition"
+            />
           </div>
 
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-6 flex items-center gap-2">
-              <span>⚠️</span> {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-2">
-                Username
-              </label>
+          <div>
+            <label className="text-xs font-semibold text-gray-500">Password</label>
+            <div className="relative mt-1">
               <input
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                autoFocus
-                className="w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
+                type={showPw ? "text" : "password"} name="password"
+                value={form.password} onChange={handleChange}
+                placeholder="••••••••" required
+                className="w-full border-2 border-gray-200 focus:border-orange-400 rounded-xl px-4 py-2.5 text-sm outline-none transition pr-10"
               />
+              <button type="button" onClick={() => setShowPw(!showPw)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <i className={`fas ${showPw ? "fa-eye-slash" : "fa-eye"}`}></i>
+              </button>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-sm font-semibold text-gray-300 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPass ? "text" : "password"}
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="w-full bg-gray-900 border border-gray-700 text-white placeholder-gray-600 rounded-xl px-4 py-3 pr-12 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 transition-colors"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPass(!showPass)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-sm transition-colors"
-                >
-                  {showPass ? "Hide" : "Show"}
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl transition-all hover:scale-[1.02] active:scale-100 mt-2"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
-                </span>
-              ) : (
-                "Sign In →"
-              )}
-            </button>
-          </form>
+          <div className="text-right">
+            <Link to="/forgot-password" className="text-xs text-orange-500 font-semibold hover:underline">
+              Forgot password?
+            </Link>
+          </div>
 
           <button
-            onClick={() => navigate("/")}
-            className="mt-8 w-full text-center text-gray-600 hover:text-gray-400 text-sm transition-colors"
+            type="submit" disabled={loading}
+            className="w-full bg-orange-500 hover:bg-orange-600 active:scale-95 text-white font-bold py-3 rounded-xl transition-all text-sm mt-2"
           >
-            ← Back to home
+            {loading ? "Signing In..." : "Login"}
           </button>
-        </div>
+        </form>
+
+        <p className="text-center text-sm text-gray-500 mt-4">
+          Don't have an account?{" "}
+          <Link to="/register" className="text-orange-500 font-bold hover:underline">Register</Link>
+        </p>
       </div>
     </div>
   );
-            }
+};
+
+export default Login;
