@@ -20,10 +20,20 @@ export function disconnectSocket() {
   if (socket.connected) socket.disconnect();
 }
 
-export function joinConversation(conversationId) {
-  if (socket.connected) socket.emit("join_conversation", conversationId);
+// room = a conversation id, OR `live_<roomId>` for a live room —
+// the server's single join_room/leave_room handler branches on the prefix.
+export function joinRoom(room) {
+  if (socket.connected) socket.emit("join_room", room);
 }
 
-export function leaveConversation(conversationId) {
-  if (socket.connected) socket.emit("leave_conversation", conversationId);
+export function leaveRoom(room) {
+  if (socket.connected) socket.emit("leave_room", room);
 }
+
+// Convenience wrappers used by InboxPage
+export const joinConversation = (id) => joinRoom(id);
+export const leaveConversation = (id) => leaveRoom(id);
+
+// Convenience wrappers used by LivePage
+export const joinLiveSocketRoom = (roomId) => joinRoom(`live_${roomId}`);
+export const leaveLiveSocketRoom = (roomId) => leaveRoom(`live_${roomId}`);
