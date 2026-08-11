@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Wallet, ArrowDownCircle, ArrowUpCircle, Send, BadgeCheck } from "lucide-react";
+import { LogOut, Wallet, ArrowDownCircle, ArrowUpCircle, Send, BadgeCheck, Camera } from "lucide-react";
 import API from "../api/axios";
 import BottomNav from "../components/BottomNav";
 import { formatCurrency } from "../utils/formatCurrency";
@@ -12,11 +12,15 @@ function initials(name = "") {
 export default function ProfilePage() {
   const navigate = useNavigate();
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
+  const avatarInputRef = useRef(null);
+  const coverInputRef = useRef(null);
 
   const [profile, setProfile] = useState(null);
   const [balance, setBalance] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   useEffect(() => {
     if (!storedUser?.username) return;
@@ -32,6 +36,40 @@ export default function ProfilePage() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     navigate("/login", { replace: true });
+  };
+
+  const uploadAvatar = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const { data } = await API.post("/users/me/avatar", formData);
+      setProfile((p) => ({ ...p, avatarUrl: data.avatarUrl }));
+    } catch (err) {
+      alert(err?.response?.data?.message || "Avatar upload failed");
+    } finally {
+      setUploadingAvatar(false);
+      e.target.value = "";
+    }
+  };
+
+  const uploadCover = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCover(true);
+    try {
+      const formData = new FormData();
+      formData.append("cover", file);
+      const { data } = await API.post("/users/me/cover-photo", formData);
+      setProfile((p) => ({ ...p, coverPhotoUrl: data.coverPhotoUrl }));
+    } catch (err) {
+      alert(err?.response?.data?.message || "Cover photo upload failed");
+    } finally {
+      setUploadingCover(false);
+      e.target.value = "";
+    }
   };
 
   const walletAction = async (type) => {
@@ -101,6 +139,15 @@ export default function ProfilePage() {
               <img src={profile.coverPhotoUrl} alt="Cover" className="w-full h-full object-cover opacity-70" />
             )}
           </div>
+          <input ref={coverInputRef} type="file" accept="image/*" onChange={uploadCover} className="hidden" />
+          <button
+            onClick={() => coverInputRef.current?.click()}
+            disabled={uploadingCover}
+            className="absolute top-2 right-2 bg-black/40 hover:bg-black/55 text-white rounded-full p-2 disabled:opacity-60"
+          >
+            <Camera size={14} />
+          </button>
+
           <div className="absolute top-16 left-4 p-1 bg-white rounded-full shadow-md">
             {profile?.avatarUrl ? (
               <img src={profile.avatarUrl} alt="Avatar" className="w-20 h-20 rounded-full object-cover" />
@@ -109,6 +156,14 @@ export default function ProfilePage() {
                 {initials(profile?.fullName || profile?.username)}
               </div>
             )}
+            <input ref={avatarInputRef} type="file" accept="image/*" onChange={uploadAvatar} className="hidden" />
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute bottom-0 right-0 bg-orange-500 hover:bg-orange-600 text-white rounded-full p-1.5 disabled:opacity-60"
+            >
+              <Camera size={11} />
+            </button>
           </div>
         </div>
 
@@ -168,8 +223,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* Posts/Streams/Saved grids need list endpoints (getFeed doesn't filter by author,
-            and there's no VOD or saved-list route yet) — wire this up once those exist. */}
         <div className="px-4 mt-6 py-10 text-center text-gray-400 text-xs">
           Post, broadcast, and saved grids will appear here once the backend exposes
           per-user listing endpoints.
