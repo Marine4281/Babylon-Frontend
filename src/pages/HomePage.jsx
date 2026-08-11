@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Heart, MessageCircle, Gift, Bookmark, Gamepad2, X, Send, Wallet } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Heart, MessageCircle, Gift, Bookmark, Gamepad2, X, Send, Wallet, Plus, Image as ImageIcon, Film } from "lucide-react";
 import API from "../api/axios";
 import BottomNav from "../components/BottomNav";
 import { formatCurrency } from "../utils/formatCurrency";
@@ -16,6 +16,123 @@ function Avatar({ url, name, size = 40 }) {
       style={{ width: size, height: size, fontSize: size * 0.4 }}
     >
       {(name || "?")[0]?.toUpperCase()}
+    </div>
+  );
+}
+
+function ComposeModal({ onClose, onPosted }) {
+  const fileInputRef = useRef(null);
+  const [files, setFiles] = useState([]); // { file, previewUrl, type }
+  const [caption, setCaption] = useState("");
+  const [posting, setPosting] = useState(false);
+  const [error, setError] = useState("");
+
+  const pickFiles = (e) => {
+    const picked = Array.from(e.target.files || []);
+    const next = picked.map((file) => ({
+      file,
+      previewUrl: URL.createObjectURL(file),
+      type: file.type.startsWith("video") ? "video" : "image",
+    }));
+    setFiles((f) => [...f, ...next].slice(0, 10));
+  };
+
+  const removeFile = (i) => setFiles((f) => f.filter((_, idx) => idx !== i));
+
+  const submit = async () => {
+    if (!caption.trim() && files.length === 0) {
+      setError("Add a caption or some media");
+      return;
+    }
+    setPosting(true);
+    setError("");
+    try {
+      let media = [];
+      let mediaPublicIds = [];
+
+      if (files.length > 0) {
+        const formData = new FormData();
+        files.forEach((f) => formData.append("media", f.file));
+        const { data } = await API.post("/posts/upload-media", formData);
+        media = data.media.map((m) => m.url);
+        mediaPublicIds = data.media.map((m) => m.publicId);
+      }
+
+      const { data: post } = await API.post("/posts", { caption, media, mediaPublicIds });
+      onPosted(post);
+      onClose();
+    } catch (err) {
+      setError(err?.response?.data?.message || "Couldn't create post");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end justify-center backdrop-blur-xs">
+      <div className="bg-white w-full max-w-md rounded-t-3xl overflow-hidden max-h-[85vh] flex flex-col">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between shrink-0">
+          <h3 className="font-bold text-lg">New Post</h3>
+          <button onClick={onClose} className="text-gray-400"><X size={20} /></button>
+        </div>
+
+        <div className="p-4 space-y-3 overflow-y-auto">
+          <textarea
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            placeholder="What's happening, Babylonian?"
+            rows={3}
+            className="w-full text-sm bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-400 resize-none"
+          />
+
+          {files.length > 0 && (
+            <div className="grid grid-cols-3 gap-2">
+              {files.map((f, i) => (
+                <div key={i} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                  {f.type === "video" ? (
+                    <video src={f.previewUrl} className="w-full h-full object-cover" />
+                  ) : (
+                    <img src={f.previewUrl} className="w-full h-full object-cover" alt="" />
+                  )}
+                  <button
+                    onClick={() => removeFile(i)}
+                    className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,video/*"
+            multiple
+            onChange={pickFiles}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full border-2 border-dashed border-gray-200 rounded-xl py-4 flex items-center justify-center gap-2 text-gray-500 text-xs font-semibold"
+          >
+            <ImageIcon size={16} /> / <Film size={16} /> Add photos or a video
+          </button>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+
+        <div className="p-4 border-t border-gray-100 shrink-0">
+          <button
+            onClick={submit}
+            disabled={posting}
+            className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold py-3.5 rounded-xl"
+          >
+            {posting ? "Posting..." : "Post"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -155,7 +272,7 @@ function CommentsSheet({ post, onClose, onCommentAdded }) {
   );
 }
 
-function PostCard({ post, walletBalance, onLike, onSave, onGifted, onCommentOpen }) {
+function PostCard({ post, onLike, onSave, onGifted, onCommentOpen }) {
   return (
     <div className="bg-white border-b border-gray-100 md:border md:rounded-2xl overflow-hidden mb-4">
       <div className="flex items-center justify-between p-3.5">
@@ -177,7 +294,11 @@ function PostCard({ post, walletBalance, onLike, onSave, onGifted, onCommentOpen
 
       {post.media?.[0] && (
         <div className="bg-gray-100 aspect-square overflow-hidden">
-          <img src={post.media[0]} alt="" className="w-full h-full object-cover" />
+          {/\.(mp4|mov|webm)(\?|$)/i.test(post.media[0]) ? (
+            <video src={post.media[0]} controls className="w-full h-full object-cover" />
+          ) : (
+            <img src={post.media[0]} alt="" className="w-full h-full object-cover" />
+          )}
         </div>
       )}
 
@@ -192,7 +313,7 @@ function PostCard({ post, walletBalance, onLike, onSave, onGifted, onCommentOpen
             <span className="text-xs font-semibold">{post.commentsCount}</span>
           </button>
           <button
-            onClick={() => onGifted(post, "open")}
+            onClick={() => onGifted(post)}
             className="flex items-center gap-1.5 text-orange-500 font-extrabold text-xs"
           >
             <Gift size={22} /> Gift Post
@@ -237,6 +358,7 @@ export default function HomePage() {
   const [balance, setBalance] = useState(0);
   const [giftTarget, setGiftTarget] = useState(null);
   const [commentTarget, setCommentTarget] = useState(null);
+  const [composing, setComposing] = useState(false);
 
   const loadFeed = useCallback(async (pageNum) => {
     setLoading(true);
@@ -301,7 +423,6 @@ export default function HomePage() {
           <PostCard
             key={post._id}
             post={post}
-            walletBalance={balance}
             onLike={handleLike}
             onSave={handleSave}
             onGifted={(p) => setGiftTarget(p)}
@@ -327,6 +448,16 @@ export default function HomePage() {
         )}
       </main>
 
+      <button
+        onClick={() => setComposing(true)}
+        className="fixed bottom-20 right-4 bg-orange-500 hover:bg-orange-600 text-white rounded-full p-4 shadow-lg z-30"
+      >
+        <Plus size={22} />
+      </button>
+
+      {composing && (
+        <ComposeModal onClose={() => setComposing(false)} onPosted={(post) => setPosts((ps) => [post, ...ps])} />
+      )}
       {giftTarget && (
         <GiftModal post={giftTarget} walletBalance={balance} onClose={() => setGiftTarget(null)} onSent={handleGiftSent} />
       )}
@@ -343,4 +474,4 @@ export default function HomePage() {
       <BottomNav />
     </div>
   );
-            }
+      }
