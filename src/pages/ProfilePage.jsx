@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, Wallet, ArrowDownCircle, ArrowUpCircle, Send, BadgeCheck, Camera } from "lucide-react";
+import { LogOut, Wallet, ArrowDownCircle, ArrowUpCircle, Send, BadgeCheck, Camera, Pencil, Check, X } from "lucide-react";
 import API from "../api/axios";
 import BottomNav from "../components/BottomNav";
 import { formatCurrency } from "../utils/formatCurrency";
@@ -22,6 +22,11 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
 
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameDraft, setUsernameDraft] = useState("");
+  const [usernameError, setUsernameError] = useState("");
+  const [savingUsername, setSavingUsername] = useState(false);
+
   useEffect(() => {
     if (!storedUser?.username) return;
     Promise.all([API.get(`/users/${storedUser.username}`), API.get("/wallet/me")])
@@ -36,6 +41,38 @@ export default function ProfilePage() {
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     navigate("/login", { replace: true });
+  };
+
+  const startEditingUsername = () => {
+    setUsernameDraft(profile?.username || "");
+    setUsernameError("");
+    setEditingUsername(true);
+  };
+
+  const cancelEditingUsername = () => {
+    setEditingUsername(false);
+    setUsernameError("");
+  };
+
+  const saveUsername = async () => {
+    const clean = usernameDraft.trim().toLowerCase();
+    if (clean === profile?.username) {
+      setEditingUsername(false);
+      return;
+    }
+    setSavingUsername(true);
+    setUsernameError("");
+    try {
+      const { data } = await API.patch("/auth/username", { username: clean });
+      setProfile((p) => ({ ...p, username: data.username }));
+      const updatedUser = { ...storedUser, username: data.username };
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      setEditingUsername(false);
+    } catch (err) {
+      setUsernameError(err?.response?.data?.message || "Failed to update username");
+    } finally {
+      setSavingUsername(false);
+    }
   };
 
   const uploadAvatar = async (e) => {
@@ -169,10 +206,34 @@ export default function ProfilePage() {
 
         <div className="px-4 pt-8 space-y-1.5">
           <div className="flex items-center gap-1.5">
-            <h2 className="text-xl font-black tracking-tight">{profile?.username}</h2>
+            {editingUsername ? (
+              <div className="flex items-center gap-1.5 w-full">
+                <input
+                  autoFocus
+                  value={usernameDraft}
+                  onChange={(e) => setUsernameDraft(e.target.value)}
+                  disabled={savingUsername}
+                  className="text-xl font-black tracking-tight border-b-2 border-orange-400 outline-none w-40 disabled:opacity-60"
+                />
+                <button onClick={saveUsername} disabled={savingUsername} className="text-green-600 disabled:opacity-60">
+                  <Check size={18} />
+                </button>
+                <button onClick={cancelEditingUsername} disabled={savingUsername} className="text-gray-400 disabled:opacity-60">
+                  <X size={18} />
+                </button>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-xl font-black tracking-tight">{profile?.username}</h2>
+                <button onClick={startEditingUsername} className="text-gray-400 hover:text-orange-500">
+                  <Pencil size={13} />
+                </button>
+              </>
+            )}
             {profile?.countryCode && <span className="text-sm">{profile.countryCode}</span>}
             {profile?.isVerified && <BadgeCheck size={16} className="text-orange-500" />}
           </div>
+          {usernameError && <p className="text-xs text-red-500">{usernameError}</p>}
           {profile?.bio && <p className="text-xs text-gray-700 leading-relaxed pt-1">{profile.bio}</p>}
 
           <div className="flex items-center gap-4 pt-2.5 text-xs">
@@ -232,4 +293,4 @@ export default function ProfilePage() {
       <BottomNav />
     </div>
   );
-}
+  }
